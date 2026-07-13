@@ -1,0 +1,68 @@
+try
+    % 1. Find exactly where input_video.txt is stored
+    input_file_full_path = which('input_video.txt');
+    if ~isempty(input_file_full_path)
+        [target_dir, ~, ~] = fileparts(input_file_full_path);
+    else
+        model_full_path = get_param(bdroot, 'FileName');
+        [target_dir, ~, ~] = fileparts(model_full_path);
+    end
+
+    % ==========================================================
+    % 2. STREAM EDGE PIXELS TO "output_edges.txt"
+    % ==========================================================
+    if exist('out', 'var') && (isprop(out, 'output_pixels') || isfield(out, 'output_pixels'))
+        raw_output = out.output_pixels;
+    else
+        error('No output pixel variable found in the workspace.');
+    end
+
+    if isa(raw_output, 'Simulink.SimulationData.Signal')
+        processed_data = raw_output.Values.Data;
+    elseif isa(raw_output, 'timeseries')
+        processed_data = raw_output.Data;
+    else
+        processed_data = raw_output;
+    end
+
+    processed_data = squeeze(double(processed_data));
+    
+    final_output_path = fullfile(target_dir, 'output_edges.txt');
+    fileID = fopen(final_output_path, 'w');
+    fprintf(fileID, '%02x\n', uint8(processed_data));
+    fclose(fileID);
+    fprintf('--> Automation Success: "output_edges.txt" saved.\n');
+
+    % ==========================================================
+    % 3. STREAM COORDINATES TO "box_coordinates.txt"
+    % ==========================================================
+    if isprop(out, 'box_min_x') || isfield(out, 'box_min_x')
+        % Robust extraction for both Signal structures and raw timeseries classes
+        if isa(out.box_min_x, 'Simulink.SimulationData.Signal')
+            bx = out.box_min_x.Values.Data; Bx = out.box_max_x.Values.Data;
+            by = out.box_min_y.Values.Data; By = out.box_max_y.Values.Data;
+        elseif isa(out.box_min_x, 'timeseries')
+            bx = out.box_min_x.Data; Bx = out.box_max_x.Data;
+            by = out.box_min_y.Data; By = out.box_max_y.Data;
+        else
+            bx = out.box_min_x; Bx = out.box_max_x;
+            by = out.box_min_y; By = out.box_max_y;
+        end
+        
+        bx = squeeze(double(bx)); Bx = squeeze(double(Bx));
+        by = squeeze(double(by)); By = squeeze(double(By));
+        
+        coords_matrix = [bx, Bx, by, By];
+        
+        final_coords_path = fullfile(target_dir, 'box_coordinates.txt');
+        fileID_coords = fopen(final_coords_path, 'w');
+        fprintf(fileID_coords, '%d %d %d %d\n', coords_matrix');
+        fclose(fileID_coords);
+        fprintf('--> Automation Success: "box_coordinates.txt" saved directly to your folder.\n');
+    else
+        warning('Coordinates missing from output structure! Check your To Workspace block names.');
+    end
+
+catch ME
+    warning('Automation Failed: %s', ME.message);
+end

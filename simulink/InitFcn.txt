@@ -1,0 +1,27 @@
+% 1. Dynamically find the exact folder where your .slx model file is saved
+model_full_path = get_param(bdroot, 'FileName');
+[project_dir, ~, ~] = fileparts(model_full_path);
+input_file_path = fullfile(project_dir, 'input_video.txt');
+
+% 2. Load the file directly from that project folder
+if exist(input_file_path, 'file')
+    fileID = fopen(input_file_path, 'r');
+    file_contents = textscan(fileID, '%s');
+    fclose(fileID);
+    try
+        raw_pixels = hex2dec(file_contents{1});
+    catch
+        raw_pixels = readmatrix(input_file_path);
+        raw_pixels = raw_pixels(~isnan(raw_pixels));
+    end
+    total_cycles = length(raw_pixels);
+    assignin('base', 'input_stream', [(0:total_cycles-1)', raw_pixels]);
+    
+    % --- THE AUTOMATION LEVEL-UP ---
+    % Force the Simulink model stop time box to match the exact size of the video file
+    set_param(bdroot, 'StopTime', num2str(total_cycles));
+    fprintf('--> Automation Success: Simulink StopTime auto-set to %d to match total text pixels.\n', total_cycles);
+    % ---------------------------------
+else
+    warndlg(['Warning: input_video.txt was not found in your project folder: ', project_dir]);
+end
